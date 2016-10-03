@@ -94,7 +94,7 @@ func main() {
 			log.Println(err)
 		}
 		if( count == 2 ) {
-			time.Sleep(500 * time.Millisecond);
+			//time.Sleep(500 * time.Millisecond);
 			count = 0;
 		}
 		count+=1
