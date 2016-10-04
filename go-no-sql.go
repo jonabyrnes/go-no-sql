@@ -1,14 +1,75 @@
 package main
 
 import (
-	_ "github.com/go-sql-driver/mysql"
 	"log"
 	"database/sql"
 	"github.com/gocql/gocql"
-	"github.com/go-sql-driver/mysql"
 	"encoding/json"
 	"time"
+	//"github.com/influxdata/influxdb/client"
+	"github.com/go-sql-driver/mysql"
 )
+
+type DBPostPoint struct {
+	ID			string
+	Day			mysql.NullTime
+	Views			sql.NullInt64
+	Likes			sql.NullInt64
+	Dislikes		sql.NullInt64
+	EstimatedMinutesWatched	sql.NullFloat64
+	AverageViewDuration	sql.NullFloat64
+	AverageViewPercentage	sql.NullFloat64
+	FavoritesAdded		sql.NullInt64
+	FavoritesRemoved	sql.NullInt64
+	AnnotationCloseRate	sql.NullFloat64
+	AnnotationClickThroughRate	sql.NullFloat64
+	SubscribersGained	sql.NullInt64
+	SubscribersLost		sql.NullInt64
+	Shares			sql.NullInt64
+	Comments 		sql.NullInt64
+	VideoID			sql.NullString
+	Uniques			sql.NullInt64
+	Uniques7day		sql.NullInt64
+	Uniques30day		sql.NullInt64
+}
+
+type PostPoint struct {
+	ID			string		`json:"id"`
+	Day			time.Time	`json:"day"`
+	Views			int64		`json:"views"`
+	Likes			int64		`json:"likes"`
+	Dislikes		int64		`json:"dislikes"`
+	EstimatedMinutesWatched	float64		`json:"estimatedMinutesWatched"`
+	AverageViewDuration	float64		`json:"averageViewDuration"`
+	AverageViewPercentage	float64		`json:"averageViewPercentage"`
+	FavoritesAdded		int64		`json:"favoritesAdded"`
+	FavoritesRemoved	int64		`json:"favoritesRemoved"`
+	AnnotationCloseRate	float64		`json:"annotationCloseRate"`
+	AnnotationClickThroughRate	float64	`json:"annotationClickThroughRate"`
+	SubscribersGained	int64		`json:"subscribersGained"`
+	SubscribersLost		int64		`json:"subscribersLost"`
+	Shares			int64		`json:"shares"`
+	Comments 		int64		`json:"comments"`
+	VideoID			string		`json:"video_id"`
+	Uniques			int64		`json:"uniques"`
+	Uniques7day		int64		`json:"uniques_7day"`
+	Uniques30day		int64		`json:"uniques_30day"`
+}
+
+func CloneFromDB(dbpp DBPostPoint) PostPoint {
+	pp := PostPoint {
+		ID : dbpp.ID, Day : dbpp.Day.Time, Views : dbpp.Views.Int64, Likes : dbpp.Likes.Int64, Dislikes : dbpp.Dislikes.Int64,
+		EstimatedMinutesWatched	: dbpp.EstimatedMinutesWatched.Float64,
+		AverageViewDuration : dbpp.AverageViewDuration.Float64,
+		AverageViewPercentage : dbpp.AverageViewPercentage.Float64,
+		FavoritesAdded : dbpp.FavoritesAdded.Int64, FavoritesRemoved : dbpp.FavoritesRemoved.Int64,
+		AnnotationCloseRate : dbpp.AnnotationCloseRate.Float64, AnnotationClickThroughRate : dbpp.AnnotationClickThroughRate.Float64,
+		SubscribersGained : dbpp.SubscribersGained.Int64, SubscribersLost : dbpp.SubscribersLost.Int64, Shares : dbpp.Shares.Int64,
+		Comments : dbpp.Comments.Int64, VideoID : dbpp.VideoID.String,
+		Uniques : dbpp.Uniques.Int64, Uniques7day : dbpp.Uniques7day.Int64, Uniques30day : dbpp.Uniques30day.Int64,
+	}
+	return pp
+}
 
 func main() {
 
@@ -23,29 +84,6 @@ func main() {
 	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: 5}
 	session, _ := cluster.CreateSession()
 	defer session.Close()
-
-	type VideoPoint struct {
-		ID			string			`json:"id"`
-		Day			mysql.NullTime		`json:"day"`
-		Views			sql.NullInt64		`json:"views"`
-		Likes			sql.NullInt64		`json:"likes"`
-		Dislikes		sql.NullInt64		`json:"dislikes"`
-		EstimatedMinutesWatched	sql.NullFloat64		`json:"estimatedMinutesWatched"`
-		AverageViewDuration	sql.NullFloat64		`json:"averageViewDuration"`
-		AverageViewPercentage	sql.NullFloat64		`json:"averageViewPercentage"`
-		FavoritesAdded		sql.NullInt64		`json:"favoritesAdded"`
-		FavoritesRemoved	sql.NullInt64		`json:"favoritesRemoved"`
-		AnnotationCloseRate	sql.NullFloat64		`json:"annotationCloseRate"`
-		AnnotationClickThroughRate	sql.NullFloat64	`json:"annotationClickThroughRate"`
-		SubscribersGained	sql.NullInt64		`json:"subscribersGained"`
-		SubscribersLost		sql.NullInt64		`json:"subscribersLost"`
-		Shares			sql.NullInt64		`json:"shares"`
-		Comments 		sql.NullInt64		`json:"comments"`
-		VideoID			sql.NullString		`json:"video_id"`
-		Uniques			sql.NullInt64		`json:"uniques"`
-		Uniques7day		sql.NullInt64		`json:"uniques_7day"`
-		Uniques30day		sql.NullInt64		`json:"uniques_30day"`
-	}
 
 	// TODO use arrays for dynamic variables/columns, etc
 	// updated
@@ -66,16 +104,17 @@ func main() {
 	// row for row, extract and insert
 	var count uint64 = 0
 	for rows.Next() {
-		vp := VideoPoint{}
-		if err := rows.Scan( &vp.ID, &vp.Day, &vp.Views, &vp.Likes, &vp.Dislikes, &vp.EstimatedMinutesWatched, &vp.AverageViewDuration,
-			&vp.AverageViewPercentage, &vp.FavoritesAdded, &vp.FavoritesRemoved, &vp.AnnotationCloseRate,
-			&vp.AnnotationClickThroughRate, &vp.SubscribersGained, &vp.SubscribersLost, &vp.Shares, &vp.Comments,
-			&vp.VideoID, &vp.Uniques, &vp.Uniques7day, &vp.Uniques30day ); err != nil {
+		dbpp := DBPostPoint{}
+		if err := rows.Scan( &dbpp.ID, &dbpp.Day, &dbpp.Views, &dbpp.Likes, &dbpp.Dislikes, &dbpp.EstimatedMinutesWatched, &dbpp.AverageViewDuration,
+			&dbpp.AverageViewPercentage, &dbpp.FavoritesAdded, &dbpp.FavoritesRemoved, &dbpp.AnnotationCloseRate,
+			&dbpp.AnnotationClickThroughRate, &dbpp.SubscribersGained, &dbpp.SubscribersLost, &dbpp.Shares, &dbpp.Comments,
+			&dbpp.VideoID, &dbpp.Uniques, &dbpp.Uniques7day, &dbpp.Uniques30day ); err != nil {
 			log.Println("mysql error")
 			log.Fatal(err)
 		}
 
-		p, _ := json.Marshal(vp)
+		pp := CloneFromDB(dbpp)
+		p, _ := json.Marshal(pp)
 		log.Println(string(p))
 
 		points_insert := `INSERT INTO analytics.post_points( id, day, views, likes, dislikes, estimatedMinutesWatched, averageViewDuration,
@@ -86,10 +125,10 @@ func main() {
 
 		// insert the point
 		if err := session.Query(points_insert,
-			vp.ID, vp.Day.Time, vp.Views.Int64, vp.Likes.Int64, vp.Dislikes.Int64, vp.EstimatedMinutesWatched.Float64, vp.AverageViewDuration.Float64,
-			vp.AverageViewPercentage.Float64, vp.FavoritesAdded.Int64, vp.FavoritesRemoved.Int64, vp.AnnotationCloseRate.Float64,
-			vp.AnnotationClickThroughRate.Float64, vp.SubscribersGained.Int64, vp.SubscribersLost.Int64, vp.Shares.Int64, vp.Comments.Int64,
-			vp.VideoID.String, vp.Uniques.Int64, vp.Uniques7day.Int64, vp.Uniques30day.Int64).Exec(); err != nil {
+			pp.ID, pp.Day, pp.Views, pp.Likes, pp.Dislikes, pp.EstimatedMinutesWatched, pp.AverageViewDuration,
+			pp.AverageViewPercentage, pp.FavoritesAdded, pp.FavoritesRemoved, pp.AnnotationCloseRate,
+			pp.AnnotationClickThroughRate, pp.SubscribersGained, pp.SubscribersLost, pp.Shares, pp.Comments,
+			pp.VideoID, pp.Uniques, pp.Uniques7day, pp.Uniques30day).Exec(); err != nil {
 			log.Println("cassandra error")
 			log.Println(err)
 		}
