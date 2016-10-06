@@ -170,7 +170,9 @@ func main() {
 		//}
 
 		// Create a point and add to batch
-		tags := map[string]string{}
+		tags := map[string]string{
+			"video_id" : pp.VideoID,
+		}
 		fields := map[string]interface{}{
 			"id" : pp.ID, "views" : pp.Views, "likes" : pp.Likes, "dislikes" : pp.Dislikes,
 			"estimated_minutes_watched" : pp.EstimatedMinutesWatched,

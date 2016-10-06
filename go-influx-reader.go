@@ -5,6 +5,8 @@ import (
 	"log"
 	//"time"
 	//"encoding/json"
+	"time"
+	"fmt"
 )
 
 const (
@@ -43,8 +45,12 @@ func main() {
 		log.Fatalln("Error: ", err)
 	}
 
+	time1, _ := time.Parse(time.RFC3339, "2016-04-01T00:00:00+00:00")
+	time2, _ := time.Parse(time.RFC3339, "2016-04-31T00:00:00+00:00")
+	q := fmt.Sprintf("select sum(views) from post_metrics WHERE time >= %d AND time <= %d group by video_id LIMIT 10",
+		time1.UnixNano(), time2.UnixNano())
 
-	q := "select sum(views) from post_metrics group by video_id"
+	println(q)
 	var res, _ = queryDB(c, q)
 	if err != nil {
 		log.Fatal(err)
