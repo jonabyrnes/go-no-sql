@@ -56,6 +56,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	println(len(res[0].Series))
 	for _, row := range res[0].Series {
 		videoId := row.Tags["video_id"]
 		sum := row.Values[0][1]

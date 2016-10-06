@@ -6,8 +6,10 @@ import (
 	//"github.com/gocql/gocql"
 	//"encoding/json"
 	"time"
-	"github.com/influxdata/influxdb/client/v2"
+	//"github.com/influxdata/influxdb/client/v2"
 	"github.com/go-sql-driver/mysql"
+	"github.com/gocql/gocql"
+"strings"
 )
 
 type DBPostPoint struct {
@@ -84,34 +86,34 @@ func main() {
     	db, err := sql.Open("mysql", "root:root@/analytics")
 
 	// connect to cassandra
-	//cluster := gocql.NewCluster("127.0.0.1")
-	//cluster.ProtoVersion = 4
-	//cluster.Keyspace = "analytics"
-	//cluster.Consistency = gocql.One
-	//cluster.Timeout = 2 * time.Minute
-	//cluster.NumConns = 1
-	//cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: 5}
-	//session, _ := cluster.CreateSession()
-	//defer session.Close()
+	cluster := gocql.NewCluster("127.0.0.1")
+	cluster.ProtoVersion = 4
+	cluster.Keyspace = "analytics"
+	cluster.Consistency = gocql.One
+	cluster.Timeout = 2 * time.Minute
+	cluster.NumConns = 1
+	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: 5}
+	session, _ := cluster.CreateSession()
+	defer session.Close()
 
 	// connect to influx
-	c, err := client.NewHTTPClient(client.HTTPConfig {
-		Addr: "http://localhost:8086",
-		Username: username,
-		Password: password,
-	})
-	if err != nil {
-		log.Fatalln("Error: ", err)
-	}
+	//c, err := client.NewHTTPClient(client.HTTPConfig {
+	//	Addr: "http://localhost:8086",
+	//	Username: username,
+	//	Password: password,
+	//})
+	//if err != nil {
+	//	log.Fatalln("Error: ", err)
+	//}
 
-	// TODO use arrays for dynamic variables/columns, etc
-	// updated
+	// mysql query for source data
+	// TODO: updated
 	points_query := `SELECT id, day, views, likes, dislikes, estimatedMinutesWatched, averageViewDuration,
 				averageViewPercentage, favoritesAdded, favoritesRemoved, annotationCloseRate,
 				annotationClickThroughRate, subscribersGained, subscribersLost, shares, comments,
 				video_id, uniques, uniques_7day, uniques_30day
 			FROM analytics.views_yt
-			LIMIT 100000`
+			LIMIT 10`
 
 	// execute the mysql query
 	start := time.Now()
@@ -122,13 +124,13 @@ func main() {
 	defer rows.Close()
 
 	// create the batch for the points
-	bp, err := client.NewBatchPoints(client.BatchPointsConfig{
-		Database:  MyDB,
-		Precision: "s",
-	})
-	if err != nil {
-		log.Fatalln("Error: ", err)
-	}
+	//bp, err := client.NewBatchPoints(client.BatchPointsConfig{
+	//	Database:  MyDB,
+	//	Precision: "s",
+	//})
+	//if err != nil {
+	//	log.Fatalln("Error: ", err)
+	//}
 
 	// row for row, extract and insert
 	var count uint64 = 0
@@ -153,55 +155,54 @@ func main() {
 		//log.Println(string(p))
 
 		// insert into cassandra
-		//points_insert := `INSERT INTO analytics.post_points( id, day, views, likes, dislikes, estimatedMinutesWatched, averageViewDuration,
-		//			averageViewPercentage, favoritesAdded, favoritesRemoved, annotationCloseRate,
-		//			annotationClickThroughRate, subscribersGained, subscribersLost, shares, comments,
-		//			video_id, uniques, uniques_7day, uniques_30day )
+		//points_insert := `INSERT INTO analytics.post_points( day, video_id, id, views, likes, dislikes, estimated_minutes_watched, average_view_duration,
+		//			average_view_percentage, favorites_added, favorites_removed, annotation_close_rate,
+		//			annotation_click_through_rate, subscribers_gained, subscribers_lost, shares, comments,
+		//			uniques, uniques_7day, uniques_30day )
 		//		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		//
-		//// insert the point
-		//if err := session.Query(points_insert,
-		//	pp.ID, pp.Day, pp.Views, pp.Likes, pp.Dislikes, pp.EstimatedMinutesWatched, pp.AverageViewDuration,
-		//	pp.AverageViewPercentage, pp.FavoritesAdded, pp.FavoritesRemoved, pp.AnnotationCloseRate,
-		//	pp.AnnotationClickThroughRate, pp.SubscribersGained, pp.SubscribersLost, pp.Shares, pp.Comments,
-		//	pp.VideoID, pp.Uniques, pp.Uniques7day, pp.Uniques30day).Exec(); err != nil {
-		//	log.Println("cassandra error")
-		//	log.Println(err)
-		//}
+
+		points_insert := `INSERT INTO analytics.post_points( day, video_id, views ) VALUES (?, ?, ?)`
+		// insert the point
+		date := pp.Day.Format(time.RFC3339);
+		if err := session.Query(points_insert, strings.Split(date,"T")[0], pp.VideoID, pp.Views).Exec(); err != nil {
+			log.Println("cassandra error")
+			log.Println(err)
+		}
 
 		// Create a point and add to batch
-		tags := map[string]string{
-			"video_id" : pp.VideoID,
-		}
-		fields := map[string]interface{}{
-			"id" : pp.ID, "views" : pp.Views, "likes" : pp.Likes, "dislikes" : pp.Dislikes,
-			"estimated_minutes_watched" : pp.EstimatedMinutesWatched,
-			"average_view_duration" : pp.AverageViewDuration,
-			"average_view_percentage" : pp.AverageViewPercentage,
-			"favorites_added" : pp.FavoritesAdded, "favorites_removed" : pp.FavoritesRemoved,
-			"annotation_close_rate" : pp.AnnotationCloseRate,
-			"annotation_click_through_rate" : pp.AnnotationClickThroughRate,
-			"subscribers_gained" : pp.SubscribersGained, "subscribers_lost" : pp.SubscribersLost,
-			"shares" : pp.Shares, "comments" : pp.Comments, "video_id" : pp.VideoID,
-			"uniques" : pp.Uniques, "uniques_7day" : pp.Uniques7day, "uniques_30day" : pp.Uniques30day,
-		}
-		pt, err := client.NewPoint("post_metrics", tags, fields, pp.Day)
-		if err != nil {
-			log.Fatalln("Error: ", err)
-		}
-		bp.AddPoint(pt)
+		//tags := map[string]string{
+		//	"video_id" : pp.VideoID,
+		//}
+		//fields := map[string]interface{}{
+		//	"id" : pp.ID, "views" : pp.Views, "likes" : pp.Likes, "dislikes" : pp.Dislikes,
+		//	"estimated_minutes_watched" : pp.EstimatedMinutesWatched,
+		//	"average_view_duration" : pp.AverageViewDuration,
+		//	"average_view_percentage" : pp.AverageViewPercentage,
+		//	"favorites_added" : pp.FavoritesAdded, "favorites_removed" : pp.FavoritesRemoved,
+		//	"annotation_close_rate" : pp.AnnotationCloseRate,
+		//	"annotation_click_through_rate" : pp.AnnotationClickThroughRate,
+		//	"subscribers_gained" : pp.SubscribersGained, "subscribers_lost" : pp.SubscribersLost,
+		//	"shares" : pp.Shares, "comments" : pp.Comments, "video_id" : pp.VideoID,
+		//	"uniques" : pp.Uniques, "uniques_7day" : pp.Uniques7day, "uniques_30day" : pp.Uniques30day,
+		//}
+		//pt, err := client.NewPoint("post_metrics", tags, fields, pp.Day)
+		//if err != nil {
+		//	log.Fatalln("Error: ", err)
+		//}
+		//bp.AddPoint(pt)
 
 		// commit the batch at the right point
 		if count == batch_size {
-			c.Write(bp)
-			count = 0
+			//c.Write(bp)
 			log.Printf("commmited: %d", total)
+			count = 0
 		}
 	}
 
 	// commit any remaining records
 	if count % batch_size > 0 {
-		c.Write(bp)
+		//c.Write(bp)
+		log.Printf("commmited: %d", total)
 	}
 
 	// catch mysql error
