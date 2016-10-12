@@ -38,8 +38,7 @@ func GetCqlKeyValues(session *gocql.Session, q string) []CqlKeyValue {
 	}
 
 	if err := iter.Close(); err != nil {
-		log.Print("cassandra error : ")
-		log.Fatal(err)
+		log.Fatalln("cassandra error : ", err)
 	}
 	return list
 }

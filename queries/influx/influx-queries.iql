@@ -1,0 +1,5 @@
+SELECT sum(views) INTO cum_views FROM post_metrics WHERE time >= 1459468800000000000 AND time <= 1462060800000000000 GROUP BY video_id;
+
+select top(sum,5),video_id from cum_views;
+
+drop measurement cum_views

@@ -2,25 +2,27 @@ package main
 
 import (
 	"log"
-	"encoding/json"
 	"time"
-	"strings"
-	"./cassandra"
 	"./mysql"
 	"./types"
+	"./influx"
+	"strconv"
 )
 
 const (
-	limit = 1000
-	batchSize = 1000
+	url = "http://localhost:8086"
+	dbName = "analytics"
+	username = "bubba"
+	password = "bumblebeetuna"
+	limit = 0
+	batchSize = 50000
 )
 
 func main() {
 
 	// connect to mysqld and cassandra
 	db := mysql.GetDatabase("root:root@/analytics")
-	session := cassandra.GetCassandra("127.0.0.1", "analytics")
-	defer session.Close()
+	c := influx.GetInflux(url, username, password)
 
 	// mysql query for source data
 	// TODO: updated
@@ -31,7 +33,7 @@ func main() {
 			FROM analytics.views_yt`
 
 	if( limit > 0) {
-		metricsQuery += ` LIMIT 1000`
+		metricsQuery += ` LIMIT ` + strconv.Itoa(limit)
 	}
 
 	// execute the mysql query
@@ -39,10 +41,13 @@ func main() {
 	rows := mysql.SqlQuery( db, metricsQuery )
 	defer rows.Close()
 
+	// get the batch
+	bp := influx.GetBatch(dbName)
+
 	// row for row, extract and insert
 	var count uint64 = 0
 	var total uint64 = 0
-	for rows.Next() {
+	for rows.Next() { // FYI: set net_read_timeout on mysql
 
 		// grab the next row
 		count +=1
@@ -59,21 +64,31 @@ func main() {
 		// serialize to something more normal
 		pp := types.CloneFromDB(dbpp)
 
-		// generate the insert
-		metrics, _ := json.Marshal(pp)
-		date := pp.Day.Format(time.RFC3339);
-		day := strings.Split(date,"T")[0] // technically this may not be correct
-		metricsInsert := `INSERT INTO analytics.post_metrics( post_id, day, metrics ) VALUES (?, ?, ?)`
-		//if err := session.Query(metrics_insert, pp.VideoID, pp.Day, metrics).Exec(); err != nil {
-		if err := session.Query(metricsInsert, pp.VideoID, day, metrics).Exec(); err != nil {
-			log.Print("cassandra error : ")
-			log.Fatal(err)
+		// Create a point and add to batch
+		tags := map[string]string{
+			"video_id" : pp.VideoID,
 		}
+		fields := map[string]interface{}{
+			"id" : pp.ID, "views" : pp.Views, "likes" : pp.Likes, "dislikes" : pp.Dislikes,
+			"estimated_minutes_watched" : pp.EstimatedMinutesWatched,
+			"average_view_duration" : pp.AverageViewDuration,
+			"average_view_percentage" : pp.AverageViewPercentage,
+			"favorites_added" : pp.FavoritesAdded, "favorites_removed" : pp.FavoritesRemoved,
+			"annotation_close_rate" : pp.AnnotationCloseRate,
+			"annotation_click_through_rate" : pp.AnnotationClickThroughRate,
+			"subscribers_gained" : pp.SubscribersGained, "subscribers_lost" : pp.SubscribersLost,
+			"shares" : pp.Shares, "comments" : pp.Comments, "video_id" : pp.VideoID,
+			"uniques" : pp.Uniques, "uniques_7day" : pp.Uniques7day, "uniques_30day" : pp.Uniques30day,
+		}
+		pt := influx.GetPoint("post_metrics", tags, fields, pp.Day)
+		bp.AddPoint(pt)
 
 		// commit / log the batch at the right point
 		if count == batchSize {
 			elapsed := time.Since(start)
+			c.Write(bp)
 			log.Printf("commmited: %d entries in %s.", total, elapsed)
+			time.Sleep(30*time.Second)
 			count = 0
 		}
 	}
@@ -81,7 +96,8 @@ func main() {
 	// commit / log any remaining records
 	if count % batchSize > 0 {
 		elapsed := time.Since(start)
-		log.Printf("commmited: %d entries in s.", total, elapsed)
+		c.Write(bp)
+		log.Printf("commmited: %d entries in %s.", total, elapsed)
 	}
 
 }

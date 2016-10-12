@@ -14,8 +14,7 @@ type SqlKeyValue struct {
 func GetDatabase(url string) *sql.DB {
 	db, err := sql.Open("mysql", url)
 	if err != nil {
-		log.Print("mysql error : ")
-		log.Fatal(err)
+		log.Fatalln("mysql error : ", err)
 	}
 	return db
 }
@@ -24,8 +23,7 @@ func GetDatabase(url string) *sql.DB {
 func SqlQuery(db *sql.DB, q string) *sql.Rows {
 	rows, err := db.Query(q)
 	if err != nil {
-		log.Print("error executing query : ")
-		log.Fatal(err)
+		log.Fatalln("error executing query : ", err)
 	}
 	return rows
 }
@@ -40,15 +38,13 @@ func GetSqlKeyValues(db *sql.DB, sql string) []SqlKeyValue {
 	for rows.Next() {
 		pair := SqlKeyValue{}
 		if err := rows.Scan( &pair.Key,  &pair.Value ); err != nil {
-			log.Print("error loading sql row : ")
-			log.Fatal(err)
+			log.Fatalln("error loading sql row : ", err)
 		}
 		list = append(list, pair)
 	}
 
 	if err := rows.Err(); err != nil {
-		log.Print("mysql error : ")
-		log.Fatal(err)
+		log.Fatalln("mysql error : ", err)
 	}
 	return list
 }
